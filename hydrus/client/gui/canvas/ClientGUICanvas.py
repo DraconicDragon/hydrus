@@ -792,7 +792,7 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         return self._current_media
         
     
-    def HandleMouseMoveWithoutEvent( self, is_dragging: bool ):
+    def HandleMouseMoveWithoutEvent( self, is_dragging: bool, right_down: bool = False ):
         
         pass
         
@@ -2308,6 +2308,11 @@ class CanvasWithHovers( Canvas ):
         
         self._RestartCursorHideWait()
         
+        self._zoom_drag_active = False
+        self._zoom_drag_anchor_pos = QC.QPoint( 0, 0 )
+        self._zoom_drag_start_pos = QC.QPoint( 0, 0 )
+        self._zoom_drag_start_zoom = 1.0
+        self._zoom_drag_sensitivity = 0.005
     
     def _DoShowHideWindowFrame( self ):
         
@@ -3018,9 +3023,10 @@ class CanvasWithHovers( Canvas ):
             
         
     
-    def HandleMouseMoveWithoutEvent( self, left_down: bool ):
+    def HandleMouseMoveWithoutEvent( self, left_down: bool, right_down: bool = False ):
         
         is_dragging = left_down and self._last_drag_pos is not None
+        zoom_dragging = right_down and self._zoom_drag_active
         
         current_focus_tlw = QW.QApplication.activeWindow()
         
@@ -3043,6 +3049,24 @@ class CanvasWithHovers( Canvas ):
         has_moved = event_pos != self._last_motion_pos
         
         we_are_hiding_a_drag = is_dragging and CG.client_controller.new_options.GetBoolean( 'hide_canvas_drags' )
+        
+        if zoom_dragging and self._media_container.IsZoomable():
+            
+            delta = event_pos - self._zoom_drag_start_pos
+            
+            zoom_factor = 1.0 - ( delta.y() * self._zoom_drag_sensitivity )
+            zoom_factor = max( zoom_factor, 0.01 )
+            
+            distance = event_pos.y() - self._zoom_drag_start_pos.y()
+            new_zoom = self._zoom_drag_start_zoom * ( 2 ** ( -distance * self._zoom_drag_sensitivity ) )
+            
+            max_zoom = max( CG.client_controller.new_options.GetMediaZooms() )
+            new_zoom = max( 0.01, min( new_zoom, max_zoom ) )
+            
+            self._media_container.ZoomToZoomPercentAtPoint( new_zoom, self._zoom_drag_anchor_pos )
+            
+            return
+            
         
         if is_dragging:
             
@@ -3116,11 +3140,33 @@ class CanvasWithHovers( Canvas ):
     def mouseMoveEvent( self, event ):
         
         left_down = bool( event.buttons() & QC.Qt.MouseButton.LeftButton )
+        right_down = bool( event.buttons() & QC.Qt.MouseButton.RightButton )
         
-        self.HandleMouseMoveWithoutEvent( left_down )
+        self.HandleMouseMoveWithoutEvent( left_down, right_down )
         
         super().mouseMoveEvent( event )
         
+    def mousePressEvent( self, event ):
+        
+        if event.button() == QC.Qt.MouseButton.RightButton and self._media_container.IsZoomable():
+            
+            self._zoom_drag_active = True
+            self._zoom_drag_anchor_pos = QC.QPoint( event.pos() )
+            self._zoom_drag_start_pos = QC.QPoint( event.pos() )
+            self._zoom_drag_start_zoom = self._media_container.GetCurrentZoom()
+            
+        
+        super().mousePressEvent( event )
+        
+    def mouseReleaseEvent( self, event ):
+        
+        if event.button() == QC.Qt.MouseButton.RightButton:
+            
+            self._zoom_drag_active = False
+            
+        
+        super().mouseReleaseEvent( event )
+
     
     def GetCanvasType( self ):
         
