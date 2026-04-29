@@ -1959,7 +1959,7 @@ class MediaContainer( QW.QWidget ):
             
         
     
-    def _TryToChangeZoom( self, new_zoom, zoom_center_type_override = None ):
+    def _TryToChangeZoom( self, new_zoom, zoom_center_type_override = None, zoom_centerpoint_override: QC.QPoint | None = None ):
         
         if not self.IsZoomable():
             
@@ -2011,36 +2011,41 @@ class MediaContainer( QW.QWidget ):
         
         if my_width > 0 and my_height > 0:
             
-            if zoom_center_type_override is None:
+            my_pos = self.pos()
+            
+            if zoom_centerpoint_override is not None:
                 
-                zoom_center_type = CG.client_controller.new_options.GetInteger( 'media_viewer_zoom_center' )
+                zoom_centerpoint = zoom_centerpoint_override
                 
             else:
                 
-                zoom_center_type = zoom_center_type_override
-                
-            
-            my_pos = self.pos()
-            
-            # viewer center is the default
-            zoom_centerpoint = QC.QPoint( canvas_size.width() // 2, canvas_size.height() // 2 )
-            
-            if zoom_center_type == ZOOM_CENTERPOINT_MEDIA_CENTER:
-                
-                zoom_centerpoint = my_pos + QC.QPoint( my_width // 2, my_height // 2 )
-                
-            elif zoom_center_type == ZOOM_CENTERPOINT_MEDIA_TOP_LEFT:
-                
-                zoom_centerpoint = my_pos
-                
-            elif zoom_center_type == ZOOM_CENTERPOINT_MOUSE:
-                
-                mouse_pos = self.parentWidget().mapFromGlobal( ClientGUIFunctions.GetMousePos() )
-                
-                if self.parent().rect().contains( mouse_pos ):
+                if zoom_center_type_override is None:
                     
-                    zoom_centerpoint = mouse_pos
+                    zoom_center_type = CG.client_controller.new_options.GetInteger( 'media_viewer_zoom_center' )
                     
+                else:
+                    
+                    zoom_center_type = zoom_center_type_override
+                    
+                
+                # viewer center is the default
+                zoom_centerpoint = QC.QPoint( canvas_size.width() // 2, canvas_size.height() // 2 )
+                
+                if zoom_center_type == ZOOM_CENTERPOINT_MEDIA_CENTER:
+                    
+                    zoom_centerpoint = my_pos + QC.QPoint( my_width // 2, my_height // 2 )
+                    
+                elif zoom_center_type == ZOOM_CENTERPOINT_MEDIA_TOP_LEFT:
+                    
+                    zoom_centerpoint = my_pos
+                    
+                elif zoom_center_type == ZOOM_CENTERPOINT_MOUSE:
+                    
+                    mouse_pos = self.parentWidget().mapFromGlobal( ClientGUIFunctions.GetMousePos() )
+                    
+                    if self.parent().rect().contains( mouse_pos ):
+                        
+                        zoom_centerpoint = mouse_pos                    
                 
             
             # probably a simpler way to calc this, but hey
@@ -3076,6 +3081,11 @@ class MediaContainer( QW.QWidget ):
         
         self._TryToChangeZoom( new_zoom, zoom_center_type_override )
         
+        
+    def ZoomToZoomPercentAtPoint( self, new_zoom, anchor_point: QC.QPoint ):
+        
+        self._TryToChangeZoom( new_zoom, zoom_centerpoint_override = anchor_point )
+    
     
     def ZoomToZoomType( self, zoom_type = None ):
         
