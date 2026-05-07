@@ -2,36 +2,29 @@ import itertools
 import typing
 
 from qtpy import QtCore as QC
-from qtpy import QtWidgets as QW
 from qtpy import QtGui as QG
-
-from hydrus.core import HydrusConstants as HC
-from hydrus.core import HydrusData
-from hydrus.core import HydrusGlobals as HG
-from hydrus.core import HydrusNumbers
-from hydrus.core import HydrusPaths
-from hydrus.core import HydrusTime
-from hydrus.core.files import HydrusFileHandling
-from hydrus.core.files.images import HydrusImageHandling
+from qtpy import QtWidgets as QW
 
 from hydrus.client import ClientApplicationCommand as CAC
 from hydrus.client import ClientConstants as CC
 from hydrus.client import ClientGlobals as CG
-from hydrus.client import ClientRendering
-from hydrus.client import ClientUgoiraHandling
-from hydrus.client.gui import ClientGUIExceptionHandling
-from hydrus.client.gui import ClientGUIFunctions
-from hydrus.client.gui import ClientGUIMenus
-from hydrus.client.gui import ClientGUIShortcuts
-from hydrus.client.gui import ClientGUITopLevelWindows
+from hydrus.client import ClientRendering, ClientUgoiraHandling
+from hydrus.client.gui import (
+    ClientGUIExceptionHandling,
+    ClientGUIFunctions,
+    ClientGUIMenus,
+    ClientGUIShortcuts,
+    ClientGUITopLevelWindows,
+)
 from hydrus.client.gui import QtPorting as QP
-from hydrus.client.gui.canvas import ClientGUIMPV
-from hydrus.client.gui.canvas import ClientGUIQtMediaPlayer
-from hydrus.client.gui.canvas import ClientGUITransparency
+from hydrus.client.gui.canvas import ClientGUIMPV, ClientGUIQtMediaPlayer, ClientGUITransparency
 from hydrus.client.gui.media import ClientGUIMediaControls
-from hydrus.client.media import ClientMedia
-from hydrus.client.media import ClientMediaResult
-from hydrus.client.media import ClientMediaSingle
+from hydrus.client.media import ClientMedia, ClientMediaResult, ClientMediaSingle
+from hydrus.core import HydrusConstants as HC
+from hydrus.core import HydrusData, HydrusNumbers, HydrusPaths, HydrusTime
+from hydrus.core import HydrusGlobals as HG
+from hydrus.core.files import HydrusFileHandling
+from hydrus.core.files.images import HydrusImageHandling
 
 ZOOM_CENTERPOINT_MEDIA_CENTER = 0
 ZOOM_CENTERPOINT_VIEWER_CENTER = 1
@@ -1184,7 +1177,7 @@ class AnimationBar( QW.QWidget ):
             
             self._media_window.GotoFrame( current_frame_index )
             
-        elif isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIQtMediaPlayer.QtMediaPlayer ) ):
+        elif isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget, ClientGUIQtMediaPlayer.QtMediaPlayer ) ):
             
             time_index_ms = int( proportion * self._duration_ms )
             
@@ -1549,7 +1542,7 @@ class MediaContainer( QW.QWidget ):
         
         if media_window is not None:
             
-            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, ClientGUIQtMediaPlayer.QtMediaPlayer )
+            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget, StaticImage, ClientGUIQtMediaPlayer.QtMediaPlayer )
             
             media_window.removeEventFilter( self._additional_event_filter )
             
@@ -1573,7 +1566,7 @@ class MediaContainer( QW.QWidget ):
                 
                 media_window.hide()
                 
-                if isinstance( media_window, ClientGUIMPV.MPVWidget ):
+                if isinstance( media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget ) ):
                     
                     mpv_widget = media_window
                     
@@ -1710,7 +1703,7 @@ class MediaContainer( QW.QWidget ):
             
             if self._show_action == CC.MEDIA_VIEWER_ACTION_SHOW_WITH_MPV:
                 
-                if not CG.client_controller.new_options.GetBoolean( 'persist_media_window_mpv' ) or not isinstance( old_media_window, ClientGUIMPV.MPVWidget ):
+                if not CG.client_controller.new_options.GetBoolean( 'persist_media_window_mpv' ) or not isinstance( old_media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget ) ):
                     
                     self._media_window = CG.client_controller.gui.GetMPVWidget( self )
                     
@@ -1754,7 +1747,7 @@ class MediaContainer( QW.QWidget ):
             
             self._media_window.installEventFilter( self._additional_event_filter )
             
-            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, StaticImage, ClientGUIQtMediaPlayer.QtMediaPlayer )
+            launch_media_viewer_classes = ( Animation, ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget, StaticImage, ClientGUIQtMediaPlayer.QtMediaPlayer )
             
             if isinstance( self._media_window, launch_media_viewer_classes ):
                 
@@ -1806,7 +1799,7 @@ class MediaContainer( QW.QWidget ):
             
             if move_delta is not None and not move_delta.isNull():
                 
-                if isinstance( self._media_window, ClientGUIMPV.MPVWidget ) and CG.client_controller.new_options.GetBoolean( 'do_not_setgeometry_on_an_mpv' ):
+                if isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget ) ) and CG.client_controller.new_options.GetBoolean( 'do_not_setgeometry_on_an_mpv' ):
                     
                     self._MoveDelta( move_delta )
                     self.resize( size_hint )
@@ -2111,7 +2104,7 @@ class MediaContainer( QW.QWidget ):
     
     def CurrentlyPresentingMediaWithDuration( self ):
         
-        return isinstance( self._media_window, ( Animation, ClientGUIMPV.MPVWidget, ClientGUIQtMediaPlayer.QtMediaPlayer ) )
+        return isinstance( self._media_window, ( Animation, ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget, ClientGUIQtMediaPlayer.QtMediaPlayer ) )
         
     
     def DoEdgePan( self, pan_type: int ):
@@ -2200,6 +2193,7 @@ class MediaContainer( QW.QWidget ):
             Animation : 'Hydrus Native Animation Player',
             ClientGUIQtMediaPlayer.QtMediaPlayer : 'QtMediaPlayer',
             ClientGUIMPV.MPVWidget : 'MPV Embed Player',
+            ClientGUIMPV.MPVRenderWidget : 'MPV Render Player',
             EmbedButton : 'Embed Button',
             OpenExternallyPanel : 'Open Externally Panel'
         }
@@ -2289,7 +2283,7 @@ class MediaContainer( QW.QWidget ):
                     
                     self._media_window.GotoFrame( current_frame_index )
                     
-                elif isinstance( self._media_window, ClientGUIMPV.MPVWidget ):
+                elif isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget ) ):
                     
                     self._media_window.GotoPreviousOrNextFrame( direction )
                     
@@ -2407,7 +2401,7 @@ class MediaContainer( QW.QWidget ):
     
     def ReadyToSwitchMedia( self ):
         
-        if isinstance( self._media_window, ClientGUIMPV.MPVWidget ):
+        if isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget ) ):
             
             return self._media_window.IsInitialised()
             
@@ -2594,7 +2588,7 @@ class MediaContainer( QW.QWidget ):
             return False
             
         
-        return isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIQtMediaPlayer.QtMediaPlayer ) ) and self._media.HasAudio()
+        return isinstance( self._media_window, ( ClientGUIMPV.MPVWidget, ClientGUIMPV.MPVRenderWidget, ClientGUIQtMediaPlayer.QtMediaPlayer ) ) and self._media.HasAudio()
         
     
     def sizeHint(self) -> QC.QSize:

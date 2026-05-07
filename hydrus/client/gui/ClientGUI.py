@@ -7,97 +7,94 @@ import time
 import typing
 
 from qtpy import QtCore as QC
-from qtpy import QtWidgets as QW
 from qtpy import QtGui as QG
-
-from hydrus.client.search import ClientSearchFileSearchContext
-from hydrus.core import HydrusConstants as HC
-from hydrus.core import HydrusData
-from hydrus.core import HydrusEnvironment
-from hydrus.core import HydrusExceptions
-from hydrus.core import HydrusGlobals as HG
-from hydrus.core import HydrusMemory
-from hydrus.core import HydrusNumbers
-from hydrus.core import HydrusPaths
-from hydrus.core import HydrusProfiling
-from hydrus.core import HydrusSerialisable
-from hydrus.core import HydrusStaticDir
-from hydrus.core import HydrusText
-from hydrus.core import HydrusTime
-from hydrus.core.networking import HydrusNetwork
+from qtpy import QtWidgets as QW
 
 from hydrus.client import ClientApplicationCommand as CAC
 from hydrus.client import ClientConstants as CC
 from hydrus.client import ClientGlobals as CG
-from hydrus.client import ClientLocation
-from hydrus.client import ClientPaths
-from hydrus.client import ClientServices
-from hydrus.client import ClientThreading
+from hydrus.client import ClientLocation, ClientPaths, ClientServices, ClientThreading
 from hydrus.client.exporting import ClientExportingFiles
-from hydrus.client.gui import ClientGUIAboutWindow
-from hydrus.client.gui import ClientGUIAsync
-from hydrus.client.gui import ClientGUICharts
-from hydrus.client.gui import ClientGUIDialogs
-from hydrus.client.gui import ClientGUIDialogsFiles
-from hydrus.client.gui import ClientGUIDialogsMessage
-from hydrus.client.gui import ClientGUIDialogsQuick
-from hydrus.client.gui import ClientGUIDownloaders
-from hydrus.client.gui import ClientGUIDragDrop
-from hydrus.client.gui import ClientGUIFrames
-from hydrus.client.gui import ClientGUIFunctions
-from hydrus.client.gui import ClientGUIMenus
-from hydrus.client.gui import ClientGUIPopupMessages
-from hydrus.client.gui import ClientGUIShortcuts
-from hydrus.client.gui import ClientGUISplash
-from hydrus.client.gui import ClientGUIStyle
-from hydrus.client.gui import ClientGUISubscriptions
-from hydrus.client.gui import ClientGUISystemTray
-from hydrus.client.gui import ClientGUITopLevelWindows
-from hydrus.client.gui import ClientGUITopLevelWindowsPanels
-from hydrus.client.gui import QLocator
-from hydrus.client.gui import ClientGUILocatorSearchProviders
+from hydrus.client.gui import (
+    ClientGUIAboutWindow,
+    ClientGUIAsync,
+    ClientGUICharts,
+    ClientGUIDialogs,
+    ClientGUIDialogsFiles,
+    ClientGUIDialogsMessage,
+    ClientGUIDialogsQuick,
+    ClientGUIDownloaders,
+    ClientGUIDragDrop,
+    ClientGUIFrames,
+    ClientGUIFunctions,
+    ClientGUILocatorSearchProviders,
+    ClientGUIMenus,
+    ClientGUIPopupMessages,
+    ClientGUIShortcuts,
+    ClientGUISplash,
+    ClientGUIStyle,
+    ClientGUISubscriptions,
+    ClientGUISystemTray,
+    ClientGUITopLevelWindows,
+    ClientGUITopLevelWindowsPanels,
+    QLocator,
+)
 from hydrus.client.gui import QtPorting as QP
-from hydrus.client.gui.canvas import ClientGUICanvasFrame
-from hydrus.client.gui.canvas import ClientGUIMPV
-from hydrus.client.gui.canvas import ClientGUIQtMediaPlayer
+from hydrus.client.gui.canvas import ClientGUICanvasFrame, ClientGUIMPV, ClientGUIQtMediaPlayer
 from hydrus.client.gui.exporting import ClientGUIExport
 from hydrus.client.gui.importing import ClientGUIImportFolders
 from hydrus.client.gui.media import ClientGUIMediaControls
-from hydrus.client.gui.metadata import ClientGUITagDisplayMaintenanceEdit
-from hydrus.client.gui.metadata import ClientGUIManageTagParents
-from hydrus.client.gui.metadata import ClientGUIManageTagSiblings
-from hydrus.client.gui.metadata import ClientGUIMigrateTags
-from hydrus.client.gui.metadata import ClientGUITagFilter
-from hydrus.client.gui.metadata import ClientGUITagDisplayOptions
-from hydrus.client.gui.metadata import ClientGUITagDisplayMaintenanceReview
-from hydrus.client.gui.metadata import ClientGUITime
-from hydrus.client.gui.networking import ClientGUIHydrusNetwork
-from hydrus.client.gui.networking import ClientGUILogin
-from hydrus.client.gui.networking import ClientGUINetwork
-from hydrus.client.gui.pages import ClientGUIPageManager
-from hydrus.client.gui.pages import ClientGUIPages
-from hydrus.client.gui.pages import ClientGUISession
-from hydrus.client.gui.panels import ClientGUIFilesPhysicalStoragePanels
-from hydrus.client.gui.panels import ClientGUILocalFileImports
-from hydrus.client.gui.panels import ClientGUIScrolledPanels
-from hydrus.client.gui.panels import ClientGUIScrolledPanelsEdit
-from hydrus.client.gui.panels import ClientGUIScrolledPanelsReview
-from hydrus.client.gui.panels import ClientGUISerialisableImport
-from hydrus.client.gui.panels import ClientGUIURLClass
+from hydrus.client.gui.metadata import (
+    ClientGUIManageTagParents,
+    ClientGUIManageTagSiblings,
+    ClientGUIMigrateTags,
+    ClientGUITagDisplayMaintenanceEdit,
+    ClientGUITagDisplayMaintenanceReview,
+    ClientGUITagDisplayOptions,
+    ClientGUITagFilter,
+    ClientGUITime,
+)
+from hydrus.client.gui.networking import ClientGUIHydrusNetwork, ClientGUILogin, ClientGUINetwork
+from hydrus.client.gui.pages import ClientGUIPageManager, ClientGUIPages, ClientGUISession
+from hydrus.client.gui.panels import (
+    ClientGUIFilesPhysicalStoragePanels,
+    ClientGUILocalFileImports,
+    ClientGUIScrolledPanels,
+    ClientGUIScrolledPanelsEdit,
+    ClientGUIScrolledPanelsReview,
+    ClientGUISerialisableImport,
+    ClientGUIURLClass,
+)
 from hydrus.client.gui.panels.options import ClientGUIManageOptionsPanel
-from hydrus.client.gui.parsing import ClientGUIParsing
-from hydrus.client.gui.parsing import ClientGUIParsingLegacy
-from hydrus.client.gui.services import ClientGUIClientsideServices
-from hydrus.client.gui.services import ClientGUIModalClientsideServiceActions
-from hydrus.client.gui.services import ClientGUIModalServersideServiceActions
-from hydrus.client.gui.services import ClientGUIServersideServices
+from hydrus.client.gui.parsing import ClientGUIParsing, ClientGUIParsingLegacy
+from hydrus.client.gui.services import (
+    ClientGUIClientsideServices,
+    ClientGUIModalClientsideServiceActions,
+    ClientGUIModalServersideServiceActions,
+    ClientGUIServersideServices,
+)
 from hydrus.client.gui.widgets import ClientGUICommon
-from hydrus.client.media import ClientMediaResult
-from hydrus.client.media import ClientMediaResultAPI
-from hydrus.client.metadata import ClientContentUpdates
-from hydrus.client.metadata import ClientTags
+from hydrus.client.media import ClientMediaResult, ClientMediaResultAPI
+from hydrus.client.metadata import ClientContentUpdates, ClientTags
 from hydrus.client.networking import ClientNetworkingFunctions
 from hydrus.client.parsing import ClientParsing
+from hydrus.client.search import ClientSearchFileSearchContext
+from hydrus.core import HydrusConstants as HC
+from hydrus.core import (
+    HydrusData,
+    HydrusEnvironment,
+    HydrusExceptions,
+    HydrusMemory,
+    HydrusNumbers,
+    HydrusPaths,
+    HydrusProfiling,
+    HydrusSerialisable,
+    HydrusStaticDir,
+    HydrusText,
+    HydrusTime,
+)
+from hydrus.core import HydrusGlobals as HG
+from hydrus.core.networking import HydrusNetwork
 
 MENU_ORDER = [ 'file', 'undo', 'pages', 'database', 'network', 'services', 'tags', 'pending', 'help' ]
 
@@ -1987,8 +1984,7 @@ QMenuBar::item { padding: 2px 8px; margin: 0px; }'''
     
     def _FlipCurlCFFITestMode( self ):
         
-        from hydrus.client.networking import ClientNetworkingCurlCFFI
-        from hydrus.client.networking import ClientNetworkingSessions
+        from hydrus.client.networking import ClientNetworkingCurlCFFI, ClientNetworkingSessions
         
         if not ClientNetworkingCurlCFFI.CURL_CFFI_OK:
             
@@ -6208,8 +6204,9 @@ ATTACH "client.mappings.db" as external_mappings;'''
                 
                 CG.client_controller.pub( 'message', job_status )
                 
-                import requests
                 import json
+
+                import requests
                 
                 s = requests.Session()
                 
@@ -7765,7 +7762,13 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         
         if len( self._persistent_mpv_widgets ) == 0:
             
-            mpv_widget = ClientGUIMPV.MPVWidget( parent )
+            if ClientGUIMPV._IsWaylandSession():
+                
+                mpv_widget = ClientGUIMPV.MPVRenderWidget( parent )
+                
+            else:
+                
+                mpv_widget = ClientGUIMPV.MPVWidget( parent )
             
             self._persistent_mpv_widgets.append( mpv_widget )
             
@@ -8561,7 +8564,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
             
         
     
-    def ReleaseMPVWidget( self, mpv_widget: ClientGUIMPV.MPVWidget ):
+    def ReleaseMPVWidget( self, mpv_widget: ClientGUIMPV.MPVWidget | ClientGUIMPV.MPVRenderWidget ):
         
         mpv_widget.setParent( self )
         
