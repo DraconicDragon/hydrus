@@ -1956,11 +1956,33 @@ class Thumbnail( QW.QGraphicsItem ):
             device_independent_thumb_size = raw_thumbnail_qt_image.size()
             
         
-        x_offset = int( ( width - device_independent_thumb_size.width() ) // 2 )
+        # x_offset = int( ( width - device_independent_thumb_size.width() ) // 2 )
         
-        y_offset = int( ( height - device_independent_thumb_size.height() ) // 2 )
+        # y_offset = int( ( height - device_independent_thumb_size.height() ) // 2 )
         
-        painter.drawImage( x_offset, y_offset, raw_thumbnail_qt_image )
+        # painter.drawImage( x_offset, y_offset, raw_thumbnail_qt_image )
+        
+        content_x = thumbnail_border
+        content_y = thumbnail_border
+        content_w = width - ( thumbnail_border * 2 )
+        content_h = height - ( thumbnail_border * 2 )
+        
+        img_w = device_independent_thumb_size.width()
+        img_h = device_independent_thumb_size.height()
+        
+        if img_w > 0 and img_h > 0 and content_w > 0 and content_h > 0:
+            
+            # Uniform to fill (cover): scale by the larger ratio so all space is filled
+            scale = max( content_w / img_w, content_h / img_h )
+            draw_w = img_w * scale
+            draw_h = img_h * scale
+            draw_x = content_x + ( content_w - draw_w ) / 2.0
+            draw_y = content_y + ( content_h - draw_h ) / 2.0
+            
+            painter.save()
+            painter.setClipRect( QC.QRectF( content_x, content_y, content_w, content_h ) )
+            painter.drawImage( QC.QRectF( draw_x, draw_y, draw_w, draw_h ), raw_thumbnail_qt_image )
+            painter.restore()
         
         TEXT_BORDER = 1
         
