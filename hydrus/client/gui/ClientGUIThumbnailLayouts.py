@@ -621,9 +621,11 @@ def _guarded( fn ):
 
 # todo: Theres a few issues:
 # 1. when user scrolls down to a place instantly (eg right click scrollbar -> scroll here), then scrolling up will sometimes jump
-#       this is because of the height estimation of the layout, which well... is only an estimation, and it shouldnt be one
+#       this is because of the height estimation of the layout, which well... is only an estimation, and it shouldnt be one(? - unsure)
 #       Because of this estimate there will sometimes be jerking during scrolling upwards because height of a section changes etc
 #           I had AI try to fix this but it couldnt do it, but it wasnt super intelligent anyway
+# 1.1. This might only be an issue with smooth scroll - the visual jerking that is - it is likely that the scrollbar 
+#         position/layout height or something still changes, just no visual jerking. Needs more looking into, without smooth scroll it seems like a non-issue on the surface
 # 2. Scroll anchoring doenst seem to work at all (best way to test: scroll to bottom, resize window | or: dragon the sidebar splitter)
 class MosaicLayout( ThumbnailLayout ):
     """
