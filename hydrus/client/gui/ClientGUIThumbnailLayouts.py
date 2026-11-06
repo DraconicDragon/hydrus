@@ -457,6 +457,7 @@ class MasonryLayout(ThumbnailLayout): # also known as Waterfall layout
         
     
 
+# todo: see todo above MosaicLayout class
 USE_NUMBA = False
 
 HAVE_NUMBA = False
@@ -490,6 +491,7 @@ def _numba_fill_intervals(
     tA, tLn, tS, tQ, tMx, tMn, tK, tO, tL, tR, cnt, MC,
     bUse, bQ, bS, bLn, bKey, bMx, bMn, bK, bO, bL, bR, occ
 ):
+    inv_BW = 1.0 / BW  # Multiplication is significantly faster than division in pure Python
     for length in range( 2, n + 1 ):
         for i in range( n - length + 1 ):
             j = i + length
@@ -530,7 +532,7 @@ def _numba_fill_intervals(
                         pen = d * d if d > 0.0 else 0.0
                         key = Q_val + SPREAD_W * ( ml + mr ) * pen
                         
-                        bi = int( math.floor( LS / BW + 0.5 ) ) + HB
+                        bi = int( math.floor( LS * inv_BW + 0.5 ) ) + HB
                         bi = 0 if bi < 0 else ( NB - 1 if bi >= NB else bi )
                         if bUse[ bi ] == 0 or key < bKey[ bi ]:
                             bUse[ bi ] = 1
@@ -558,7 +560,7 @@ def _numba_fill_intervals(
                         pen = d * d if d > 0.0 else 0.0
                         key = Q_val + SPREAD_W * ( ml + mr ) * pen
                         
-                        bi = int( math.floor( lnA_st / BW + 0.5 ) ) + HB
+                        bi = int( math.floor( lnA_st * inv_BW + 0.5 ) ) + HB
                         bi = 0 if bi < 0 else ( NB - 1 if bi >= NB else bi )
                         if bUse[ bi ] == 0 or key < bKey[ bi ]:
                             bUse[ bi ] = 1
@@ -617,6 +619,12 @@ def _guarded( fn ):
     return wrapper
 
 
+# todo: Theres a few issues:
+# 1. when user scrolls down to a place instantly (eg right click scrollbar -> scroll here), then scrolling up will sometimes jump
+#       this is because of the height estimation of the layout, which well... is only an estimation, and it shouldnt be one
+#       Because of this estimate there will sometimes be jerking during scrolling upwards because height of a section changes etc
+#           I had AI try to fix this but it couldnt do it, but it wasnt super intelligent anyway
+# 2. Scroll anchoring doenst seem to work at all (best way to test: scroll to bottom, resize window | or: dragon the sidebar splitter)
 class MosaicLayout( ThumbnailLayout ):
     """
     Mosaic Layout with True Windowed JIT & Tunable Size Equality
@@ -703,6 +711,8 @@ class MosaicLayout( ThumbnailLayout ):
         self.gC = u8( 8 )
         self.gx, self.gy, self.gw, self.gh = ( i16( 8 ) for _ in range( 4 ) )
         self.gE = i8( 8 )
+
+        self._last_window_range = ( -1, -1 )
 
     @staticmethod
     def _cut( length: int, f: float ) -> int:
@@ -915,7 +925,10 @@ class MosaicLayout( ThumbnailLayout ):
     @classmethod
     def _get_pool( cls ):
         if cls._pool is None:
-            cls._pool = ThreadPoolExecutor( max_workers = 2, thread_name_prefix = 'mosaic' )
+            # When Numba is active, nogil=True allows 2 workers to run in parallel without fighting the GUI.
+            # When in Pure Python mode, 1 worker avoids GIL thrashing and leaves the main thread smooth.
+            max_workers = 2 if HAVE_NUMBA else 1
+            cls._pool = ThreadPoolExecutor( max_workers = max_workers, thread_name_prefix = 'mosaic' )
         return cls._pool
     
     def _rebuild_prefix( self ):
@@ -955,8 +968,14 @@ class MosaicLayout( ThumbnailLayout ):
                     t.prepareGeometryChange()
                     t.width = tw
                     t.height = th
-                t.setPos( px, py )
-                t.setVisible( True )
+                
+                # Avoid redundant Qt scene transform updates if coordinates haven't changed
+                curr_pos = t.pos()
+                if curr_pos.x() != px or curr_pos.y() != py:
+                    t.setPos( px, py )
+                if not t.isVisible():
+                    t.setVisible( True )
+                
                 t._mz_hidden = False
                 self._shown.add( t )
                 self._thumb_centers[ idx ] = ( px + tw / 2.0, py + th / 2.0 )
@@ -965,7 +984,7 @@ class MosaicLayout( ThumbnailLayout ):
                 pass
                 
         self._placed[ b ] = y_base
-    
+
     def _unplace( self, b ):
         if b not in self._res:
             self._placed.pop( b, None )
@@ -1036,11 +1055,27 @@ class MosaicLayout( ThumbnailLayout ):
             self._queued.add( b )
     
     def _commit( self ):
+        old_prefix = list( self._prefix )
         self._rebuild_prefix()
         view = self._connected_view
         
         self._busy = True
         try:
+            # Scroll Anchoring: if sections above the current viewport changed height,
+            # adjust the scrollbar by that delta so content does not visually jump or hitch.
+            if view is not None and len( old_prefix ) > 1:
+                vbar = view.verticalScrollBar()
+                top = self._vis_rect.top()
+                b_curr = max( 0, min( len( self._heights ) - 1, bisect.bisect_right( old_prefix, top ) - 1 ) )
+                if b_curr > 0:
+                    delta_y = self._prefix[ b_curr ] - old_prefix[ b_curr ]
+                    if delta_y != 0:
+                        vbar.setValue( vbar.value() + delta_y )
+                        # If SmoothScrollDriver is active, update its target position too
+                        driver = getattr( getattr( view, '_smooth_scroll_filter', None ), '_driver', None )
+                        if driver is not None and hasattr( driver, 'notify_range_changed' ):
+                            driver.notify_range_changed( delta_y )
+
             bounds = QC.QRectF( 0, 0, self._params.viewport_width, self._prefix[ -1 ] )
             if view is not None:
                 was_blocked = view.blockSignals( True )
@@ -1057,7 +1092,6 @@ class MosaicLayout( ThumbnailLayout ):
             return
         changed = False
         current_gen = self._gen
-        BS = self.BLOCK_SIZE
         
         for f in [ f for f in self._inflight if f.done() ]:
             chunk = self._inflight.pop( f )
@@ -1067,7 +1101,12 @@ class MosaicLayout( ThumbnailLayout ):
             try:
                 res_gen, results = f.result()
             except Exception:
-                res_gen, results = current_gen, [ ( b, self._solve_block( b, self._aspects[ b * BS : ( b + 1 ) * BS ], *self._solve_args ) ) for b in chunk ]
+                # NEVER solve synchronously on the GUI thread on exception/cancellation
+                if self.DEBUG:
+                    print( f"[mosaic] worker exception for blocks {chunk}:" )
+                    traceback.print_exc()
+                continue
+
             if res_gen != current_gen:
                 continue
             for b, res in results:
@@ -1086,12 +1125,15 @@ class MosaicLayout( ThumbnailLayout ):
         self._vis_rect = QC.QRectF( rect )
         if self._busy or not self._heights:
             return
-        self._sync_window()
-        self._pump()
-        if not self._timer.isActive():
-            self._timer.start()
-    
-    # endregion
+        
+        # Only re-sync and pump if the active block window changed (avoids per-pixel scroll stalls)
+        b0, b1 = self._window_blocks()
+        if ( b0, b1 ) != self._last_window_range:
+            self._last_window_range = ( b0, b1 )
+            self._sync_window()
+            self._pump()
+            if not self._timer.isActive():
+                self._timer.start()
 
     def ArrangeThumbnails( self, thumbnails, params: LayoutParams ) -> QC.QRectF:
         if self._timer is None:
@@ -1101,6 +1143,7 @@ class MosaicLayout( ThumbnailLayout ):
         self._busy = True
         self._failed = False
         self._gen += 1
+        self._last_window_range = ( -1, -1 )
         
         try:
             for f in self._inflight:
@@ -1135,7 +1178,6 @@ class MosaicLayout( ThumbnailLayout ):
                 view = getattr( thumbnails[ 0 ], '_view', None )
                 if view and hasattr( view, 'visibleRectChanged' ):
                     view.visibleRectChanged.connect( self._on_visible_rect_changed )
-                    # Disabling AnchorViewCenter stops Qt from pulling the scrollbar when heights refine
                     view.setResizeAnchor( QW.QGraphicsView.ViewportAnchor.NoAnchor )
                     view.setTransformationAnchor( QW.QGraphicsView.ViewportAnchor.NoAnchor )
                     self._connected_view = view
@@ -1181,19 +1223,9 @@ class MosaicLayout( ThumbnailLayout ):
             self._thumb_centers = [ None ] * count
             self._thumb_rects = [ None ] * count
             
-            # CRITICAL RESIZE FIX: Determine the block currently in view and solve it IMMEDIATELY!
-            # If user is at top -> solves Block 0.
-            # If user is scrolled down -> solves the active block right at their scroll position!
-            scroll_top = self._vis_rect.top()
-            active_b = max( 0, min( len( self._heights ) - 1, bisect.bisect_right( self._prefix, max( 0.0, scroll_top ) ) - 1 ) )
-            
-            res = self._solve_block( active_b, self._aspects[ active_b * self.BLOCK_SIZE : ( active_b + 1 ) * self.BLOCK_SIZE ], *self._solve_args )
-            self._res[ active_b ] = res
-            self._heights[ active_b ] = res[ 2 ]
-            self._rebuild_prefix()
-            
+            # FAST ASYNC INIT: Do NOT solve synchronously on the GUI thread.
+            # _pump() prioritizes the block nearest the scroll position and finishes in background.
             self._total_bounds = QC.QRectF( 0, 0, params.viewport_width, self._prefix[ -1 ] )
-            self._sync_window()
             self._pump()
             self._timer.start()
             return self._total_bounds
